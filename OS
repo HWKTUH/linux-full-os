@@ -1,0 +1,30 @@
+# STAGE 1: Pull x86 Debian tools
+FROM --platform=linux/amd64 debian:stable-slim AS debian-tools
+RUN apt-get update && apt-get install -y dpkg apt nano && rm -rf /var/lib/apt/lists/*
+
+# STAGE 2: Build Chill OS (Using Bazzite KDE image)
+FROM ghcr.io/ublue-os/bazzite:stable
+USER root
+
+# 1. Branding
+RUN sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="Chill OS (x86 KDE)"/' /etc/os-release && \
+    echo "ID=chill-os-x86" >> /etc/os-release
+
+# 2. Copy Tools & Fix x86 Linker
+COPY --from=debian-tools /usr/bin/dpkg /usr/bin/dpkg
+COPY --from=debian-tools /usr/bin/apt* /usr/bin/
+COPY --from=debian-tools /etc/apt /etc/apt
+COPY --from=debian-tools /var/lib/dpkg /var/lib/dpkg
+RUN ln -s /usr/lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2 || true
+
+# 3. Logo and Sudo
+COPY logo.png /usr/share/pixmaps/distro-logo.png
+RUN echo "liveuser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/chill-os && \
+    echo "deb http://debian.org stable main" > /etc/apt/sources.list
+
+# 4. Fetch Script
+RUN printf '#!/bin/bash\necho -e "\\e[1;36m--- Welcome to Chill OS (x86) ---\\e[0m"\nfastfetch --logo /usr/share/pixmaps/distro-logo.png --logo-type kitty --logo-width 30\n' > /usr/bin/newfetch && \
+    chmod +x /usr/bin/newfetch && \
+    echo "newfetch" >> /etc/bash.bashrc
+
+USER liveuser
